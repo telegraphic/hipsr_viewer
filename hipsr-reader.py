@@ -15,7 +15,7 @@ from datetime import datetime
 import numpy as np, tables as tb
 import pylab as plt
 
-import lib.config as config
+import hipsr_core.config as config
 
 # Python metadata
 __version__  = config.__version__

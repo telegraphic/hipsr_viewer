@@ -13,8 +13,8 @@ SD-FITS viewer designed for HIPSR data.
 import sys
 from optparse import OptionParser
 
-import lib.config as config
-from lib.sdfits import *
+import hipsr_core.config as config
+from hipsr_core.sdfits import *
 
 # Python metadata
 __version__  = config.__version__
