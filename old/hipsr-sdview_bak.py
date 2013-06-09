@@ -26,15 +26,11 @@ __modified__ = datetime.fromtimestamp(os.path.getmtime(os.path.abspath( __file__
 
 try:
     import hipsr_core.qt_compat as qt_compat
-    QtGui = qt_compat.import_module("QtGui")
     QtCore = qt_compat.QtCore
-    
-    USES_PYSIDE = qt_compat.is_pyside()
-    
-    #import PyQt4
-    #from PyQt4 import QtGui, QtCore
+    QtGui = qt_compat.import_module("QtGui")
 except:
     print "Error: cannot load PySide or PyQt4. Please check your install."
+    raise
     exit()
     
 try:    
@@ -53,21 +49,17 @@ from hipsr_core.printers import LinePrint
 
 
 import matplotlib
-
 if matplotlib.__version__ == '0.99.3':
     print "Error: your matplotlib version is too old to run this. Please upgrade."
     exit()
 else:
     matplotlib.use('Qt4Agg')
-    if USES_PYSIDE:
-        matplotlib.rcParams['backend.qt4']='PySide'
-    else:
-        matplotlib.rcParams['backend.qt4']='PyQt4'
+    matplotlib.rcParams['backend.qt4']='PySide'
     from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
     from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as NavigationToolbar
     from matplotlib.figure import Figure
 try:
-    import matplotlib.pylab as plt
+    import pylab as plt
 except:
     print "Error: cannot load Pylab. Check your matplotlib install."
     exit()
@@ -102,8 +94,7 @@ class HipsrGui(QtGui.QWidget):
             height of the UI, in pixels. Defaults to 768px
         """
         
-        self.main_frame = QtGui.QWidget()   
-        self.setWindowIcon(QtGui.QIcon('lib/icon.jpg'))  
+        self.main_frame = QtGui.QWidget()    
         #self.gen_gui = generateGui()
         
         # Create buttons/widgets
@@ -160,12 +151,10 @@ class HipsrGui(QtGui.QWidget):
                 self.updatePlot()
             except:
                 print "Error: cannot open %s"%self.filename
-                #raise
         
     
     def openSdFits(self,filename):
         """Opens an SD-FITS file and loads it into memory"""
-
         fits     = pf.open(filename)
        
         self.fits_filename     = fits.filename()
@@ -177,8 +166,7 @@ class HipsrGui(QtGui.QWidget):
         self.fits_tsys    = fits[1].data['TSYS']
         self.fits_header  = fits[1].header
         self.fits_shape   = np.shape(self.fits_data)
-        
-        # Frequency-like axis values
+                # Frequency-like axis values
         ref_pix   = fits[1].data['CRPIX1']  # Reference pixel
         ref_val   = fits[1].data['CRVAL1']  # Value at reference pixel (in Hz)
         ref_delt  = fits[1].data['CDELT1']  # Delta between pixels
@@ -191,38 +179,6 @@ class HipsrGui(QtGui.QWidget):
         self.fits_freqs = (np.arange(0,num_pix,1) * ref_delt[0] + ( ref_val[0] - ref_pix[0] * ref_delt[0] ) ) / 1e6 
         self.fits_freq_type = fits[1].header.get('CTYPE1')
         self.fits_freq_unit = 'MHz' # TODO: check this
-        
-        # Stokes codes are the CRVAL2 in the header
-        stokes_codes = {
-            1  : 'Stokes I',
-            2  : 'Stokes Q',
-            3  : 'Stokes U',
-            4  : 'Stokes V',
-            -1 : 'RR',
-            -2 : 'LL',
-            -3 : 'RL',
-            -4 : 'LR',
-            -5 : 'XX',
-            -6 : 'YY',
-            -7 : 'XY',
-            -8 : 'YX'
-        }
-        
-        try:
-            self.xlabel = stokes_codes[int(fits[1].header['CRVAL2'])]
-            self.ylabel = stokes_codes[int(fits[1].header['CRVAL2']) + int(fits[1].header['CDELT2']) ] 
-        except:
-            print "Warning: unknown stokes code: %s"%fits[1].header['CRVAL2']
-            self.xlabel = 'Unknown X'       
-            self.ylabel = 'Unknown Y' 
-        
-        print fits.info()        
-
-        print "File date:  %s"%fits[0].header['DATE']
-        print "Telescope:  %s"%self.fits_header['TELESCOP']
-        print "Observer:   %s"%self.fits_header['OBSERVER']
-        print "Project ID: %s"%self.fits_header['PROJID']               
-        print "Data type:  %s %s"%(self.xlabel, self.ylabel)
         
         # Reset slider
         self.current_row = 0
@@ -271,51 +227,26 @@ class HipsrGui(QtGui.QWidget):
         tsys      = self.fits_tsys[row,:]
         
         #plt.plot(freqs, data_x)
+        plt.plot(freqs[flagged_x == 0], data_x[flagged_x == 0], color='#333333', label='Pol A [%2.1f Jy]'%tsys[0])  
+        plt.plot(freqs[flagged_y == 0], data_y[flagged_y == 0], color='#CC0000', label='Pol B [%2.1f Jy]'%tsys[1])         
         
-        colors = ['#333333','#CC0000',"#5fafc6","#6dae81","#9d81ba","#cd4a4a"]
-        if self.xlabel == 'Stokes I':
-            c1 = colors[3]
-            c2 = colors[2]
-        else:
-            c1 = colors[0]
-            c2 = colors[1]
-        
-        self.sp_plot =  plt.plot(freqs[flagged_x == 0], data_x[flagged_x == 0], color=c1, 
-                        label='%s [%2.1f Jy]'%(self.xlabel, tsys[0]))  
-        self.sp_plot2 = plt.plot(freqs[flagged_y == 0], data_y[flagged_y == 0], color=c2, 
-                        label='%s [%2.1f Jy]'%(self.ylabel, tsys[1]))         
         
         plt.ylabel('%s [%s]'%(self.fits_data_name, self.fits_data_unit))
         plt.xlabel('%s [%s]'%(self.fits_freq_type, self.fits_freq_unit))
         plt.title('Beam %s: %s %s'%(self.fits_beam[row], self.fits_date[row], self.fits_time[row]))
         plt.xlim(np.min(freqs[flagged_x == 0]), np.max(freqs[flagged_x == 0]))
-    
-        
         plt.legend()
-        #plt.show()
-        
+        plt.show()
 
+        
         self.sp_fig.canvas.draw()
-        #self.sp_canvas.draw()
               
         self.lab_info.setText(self.fits_filename)       
                       
     def onButOpen(self):
         """ Button action: Open station file """
         self.file_dialog    = QtGui.QFileDialog()
-        fileparts = self.file_dialog.getOpenFileName()
-        
-        # Compatibility check
-        if isinstance(fileparts, str) or isinstance(fileparts, unicode):
-            filename = fileparts
-        
-        elif not USES_PYSIDE:
-            if isinstance(fileparts, PyQt4.QtCore.QString):
-                filename = str(fileparts)
-            else:
-                filename = fileparts
-        else:
-            filename = fileparts[0]
+        filename = self.file_dialog.getOpenFileName()
         
         self.openSdFits(filename)
         self.updatePlot()

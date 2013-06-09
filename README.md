@@ -1,4 +1,4 @@
-hipsr-software
-==============
+hipsr-viewer
+============
 
-Software and scripts for HIPSR project.
+Viewing software for HIPSR data. 
