@@ -13,8 +13,8 @@ SD-FITS viewer designed for HIPSR data.
 import sys
 from optparse import OptionParser
 
-import hipsr_core.config as config
-from hipsr_core.sdfits import *
+import lib.config as config
+from lib.sdfits import *
 
 # Python metadata
 __version__  = config.__version__
@@ -23,34 +23,7 @@ __email__    = config.__email__
 __license__  = config.__license__
 __modified__ = datetime.fromtimestamp(os.path.getmtime(os.path.abspath( __file__ )))
 
-
-try:
-    import hipsr_core.qt_compat as qt_compat
-    QtGui = qt_compat.import_module("QtGui")
-    QtCore = qt_compat.QtCore
-    
-    USES_PYSIDE = qt_compat.is_pyside()
-    
-    #import PyQt4
-    #from PyQt4 import QtGui, QtCore
-except:
-    print "Error: cannot load PySide or PyQt4. Please check your install."
-    exit()
-    
-try:    
-    import numpy as np
-except:
-    print "Error: cannot load Numpy. Please check your install."
-    exit()
-
-try:    
-    import pyfits as pf
-except:
-    print "Error: cannot load PyFITS. Please check your install."
-    exit()
-
-from hipsr_core.printers import LinePrint
-
+USES_PYSIDE = False
 
 import matplotlib
 
@@ -71,6 +44,36 @@ try:
 except:
     print "Error: cannot load Pylab. Check your matplotlib install."
     exit()
+    
+try:
+    #import lib.qt_compat as qt_compat
+    #QtGui = qt_compat.import_module("QtGui")
+    #QtCore = qt_compat.QtCore
+    
+    
+    
+    import PyQt4
+    from PyQt4 import QtGui, QtCore
+except:
+    print "Error: cannot load PySide or PyQt4. Please check your install."
+    exit()
+    
+try:    
+    import numpy as np
+except:
+    print "Error: cannot load Numpy. Please check your install."
+    exit()
+
+try:    
+    import pyfits as pf
+except:
+    print "Error: cannot load PyFITS. Please check your install."
+    exit()
+
+from lib.printers import LinePrint
+
+
+
 
 class HipsrGui(QtGui.QWidget):
     """ HIPSR GUI class
@@ -179,16 +182,23 @@ class HipsrGui(QtGui.QWidget):
         self.fits_shape   = np.shape(self.fits_data)
         
         # Frequency-like axis values
-        ref_pix   = fits[1].data['CRPIX1']  # Reference pixel
-        ref_val   = fits[1].data['CRVAL1']  # Value at reference pixel (in Hz)
-        ref_delt  = fits[1].data['CDELT1']  # Delta between pixels
+
+        try:
+            ref_pix   = fits[1].header['CRPIX1']   # Freq Reference pixel
+            ref_val   = fits[1].header['CRVAL1']   # Value at reference pixel (in Hz)
+            ref_delt  = fits[1].header['CDELT1']   # Delta between pixels
+        except KeyError:
+            ref_pix   = fits[1].data['CRPIX1'][0]  # Freq Reference pixel
+            ref_val   = fits[1].data['CRVAL1'][0]  # Value at reference pixel (in Hz)
+            ref_delt  = fits[1].data['CDELT1'][0]  # Delta between pixels
         num_pix   = self.fits_data.shape[-1]# Last axis of data array (multidimensional)
-        
+        self.fits_npol = self.fits_data.shape[-2]
         # Might be better to look this up than assume it's col 25
         self.fits_data_name = fits[1].header.get('TTYPE25')   
         self.fits_data_unit = fits[1].header.get('TUNIT25')
-        
-        self.fits_freqs = (np.arange(0,num_pix,1) * ref_delt[0] + ( ref_val[0] - ref_pix[0] * ref_delt[0] ) ) / 1e6 
+
+
+        self.fits_freqs = (np.arange(0,num_pix,1) * ref_delt + (ref_val - ref_pix * ref_delt) ) / 1e6
         self.fits_freq_type = fits[1].header.get('CTYPE1')
         self.fits_freq_unit = 'MHz' # TODO: check this
         
@@ -223,6 +233,9 @@ class HipsrGui(QtGui.QWidget):
         print "Observer:   %s"%self.fits_header['OBSERVER']
         print "Project ID: %s"%self.fits_header['PROJID']               
         print "Data type:  %s %s"%(self.xlabel, self.ylabel)
+
+
+
         
         # Reset slider
         self.current_row = 0
@@ -264,9 +277,11 @@ class HipsrGui(QtGui.QWidget):
         self.spinner.setValue(row)
         
         data_x    = self.fits_data[row,0,0,0,:]
-        data_y    = self.fits_data[row,0,0,1,:]
         flagged_x = self.fits_flagged[row,0,0,0,:]
-        flagged_y = self.fits_flagged[row,0,0,1,:]        
+
+        if self.fits_npol >= 2:
+            data_y    = self.fits_data[row,0,0,1,:]
+            flagged_y = self.fits_flagged[row,0,0,1,:]
         freqs     = self.fits_freqs
         tsys      = self.fits_tsys[row,:]
         
@@ -282,7 +297,8 @@ class HipsrGui(QtGui.QWidget):
         
         self.sp_plot =  plt.plot(freqs[flagged_x == 0], data_x[flagged_x == 0], color=c1, 
                         label='%s [%2.1f Jy]'%(self.xlabel, tsys[0]))  
-        self.sp_plot2 = plt.plot(freqs[flagged_y == 0], data_y[flagged_y == 0], color=c2, 
+        if self.fits_npol >= 2:
+            self.sp_plot2 = plt.plot(freqs[flagged_y == 0], data_y[flagged_y == 0], color=c2,
                         label='%s [%2.1f Jy]'%(self.ylabel, tsys[1]))         
         
         plt.ylabel('%s [%s]'%(self.fits_data_name, self.fits_data_unit))
